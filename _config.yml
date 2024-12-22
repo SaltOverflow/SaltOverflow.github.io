@@ -35,6 +35,7 @@ github_username:  SaltOverflow
 theme: minima
 plugins:
   - jekyll-feed
+# TODO: set up RSS feed at some point
 
 # Exclude from processing.
 # The following items will not be processed, by default.
