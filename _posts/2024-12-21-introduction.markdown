@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Introduction"
-date:   2024-12-21 20:41:14 -0500
+date:   2024-12-21 09:00:00 -0500
 categories: jekyll update
 ---
 Hi, I'm Alvin Zhang. I'm currently working towards a Masters of Computer Science at the University of Waterloo, where I specialize in programming languages. In particular, I work on modelling how programmers use languages, tooling and frameworks in order to build better ones. For example: a better type syntax for C/C++, more advanced autocomplete, or REPLs for (normally) compiled languages.
