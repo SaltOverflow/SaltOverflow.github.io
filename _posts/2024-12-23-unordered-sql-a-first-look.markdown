@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Blue: Unordered SQL, a first look"
+title:  "Unordered SQL, a first look"
 date:   2024-12-27 09:00:00 -0500
 categories: jekyll update
 ---
@@ -26,7 +26,7 @@ Recursive descent parsers parse code very similarily to humans (my opinion). Wit
 
 Writing a parser by hand can also call attention to language designs that may be confusing for a human. A language designer could then look into ways to make the syntax more readable. In C, `char *arr[10];` is an [array of 10 pointers to char][Clockwise rule], but it takes some time to figure out. This is evidenced by the fact that many parsers need to parse this statement twice to figure out the type. In [Cforall][Cforall] (an open-source project that extends C), the same statement is written as `[10] * char arr`, which is arguably more readable and straightforward to parse.
 
-Recursive descent parsers make it siimple to handle errors, too. This is very important when performing autocomplete, as you're often dealing with slightly invalid syntax. If I'm currently parsing an expression and I encounter an unknown token, I can simply return what I currently have and let the parent function handle the rest. I can then add behaviour like adding a placeholder variable and marking off a sequence of tokens as "unknown."
+Recursive descent parsers make it simple to handle errors, too. This is very important when performing autocomplete, as you're often dealing with slightly invalid syntax. If I'm currently parsing an expression and I encounter an unknown token, I can simply return what I currently have and let the parent function handle the rest. I can then add behaviour like adding a placeholder variable and marking off a sequence of tokens as "unknown."
 
 The downside is that it's all custom code, so it can take longer to write. It's also possible to design it weirdly and end up with [spaghetti code][Spaghetti code], compared to using a framework like LALR grammars. There is no such thing as a free lunch - everything is a tradeoff of options.
 
