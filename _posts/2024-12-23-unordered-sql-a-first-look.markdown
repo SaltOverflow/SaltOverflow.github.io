@@ -20,7 +20,7 @@ The Abstract Syntax Tree (AST) that is generated from parsing needs to have inde
 
 ## Recursive descent parsers
 
-I argue that a recursive descent parser is the best choice if you are to write a parser by hand. Clang uses recursive descent for its parser, highlighting [performance, diagnostics and error recovery, and simplicity][Clang recursive descent benefits].
+There are (too) many ways to write a parser, each with their advantages and drawbacks. The way I decide is I ask the question: how difficult is it to fix if I introduce a bug? I argue that a recursive descent parser is the best choice if you are to write a parser by hand. Clang uses recursive descent for its parser, highlighting [performance, diagnostics and error recovery, and simplicity][Clang recursive descent benefits].
 
 Recursive descent parsers parse code very similarily to humans (my opinion). With a recursive descent parser, I know I'm parsing a `FROM` clause because the name of the function is `parse_from()`. I also know that any behaviour I put in this function will only happen if I'm parsing a `FROM` clause. This makes it easier to debug and add functionality.
 
