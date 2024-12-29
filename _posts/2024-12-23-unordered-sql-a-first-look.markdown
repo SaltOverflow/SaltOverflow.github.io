@@ -8,13 +8,13 @@ SQL is a very concise language, at least for the main query use-cases. But I've 
 
 I call this language Unordered SQL. The idea is to let programmers write their `SELECT`, `FROM` and `WHERE` clauses in any order, even allowing multiple of them in the same statement. A formatter can then transform it into regular SQL. The repository for this project can be found here: [Unordered SQL][Unordered SQL]. I also created a [Youtube video][Youtube video] to explain the details of the system.
 
-For this first attempt, I opted to try writing the tokenizer and lexer from scratch. This allowed me to try any features I wanted to try out in this prototype.
+For this first attempt, I opted to try writing the tokenizer and parser from scratch. This allowed me to try any features I wanted to try out in this prototype.
 
 # Features
 
 ## Zero-copy semantics
 
-The Abstract Syntax Tree (AST) that is generated from parsing needs to have indexes to the original text, in order to figure out where the cursor is in the AST. This custom restriction is one of the reasons I wrote the tokenizer and lexer from scratch, because I found that existing parser generators are somewhat restrictive in what they support. Once you're storing the string indexes, there's no need to store the string itself, and the system is likely more performant due to better cache locality.
+The Abstract Syntax Tree (AST) that is generated from parsing needs to have indexes to the original text, in order to figure out where the cursor is in the AST. This custom restriction is one of the reasons I wrote the tokenizer and parser from scratch, because I found that existing parser generators are somewhat restrictive in what they support. Once you're storing the string indexes, there's no need to store the string itself, and the system is likely more performant due to better cache locality.
 
 ![Storing indexes to the original text in the AST. The multiply expression stores the indexes 3 and 9, rather than the string original_text\[3:9\]](/assets/zero_copy_example.png)
 
