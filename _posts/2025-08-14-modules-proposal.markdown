@@ -21,13 +21,19 @@ But **isn't a C translation unit a module?** (a c translation unit is a `.c` fil
 
 Let's clarify what we're trying to achieve with our modules. The term "module" is as abused as "polymorphism" in programming languages, which makes it challenging to determine what we're working towards with a module system for C. Here are our 3 main objectives:
 
-1. **Make C translation units into modules** (needs to support cyclic modules)
-2. **Generate module interfaces** (so .h files are unnecessary)
-3. **Symbol exports are decoupled** (symbols are imported independently from each other)
+1. **Make C translation units into modules**
+2. **Remove the need for .h files**
+3. **Modules should "own" their contents**
 
-Other topics that will be dicussed include module friendship, backwards compatibility and interactions with Cforall features.
+First, to make C translation units into modules, our proposed modules should not require fundamental architectural changes to an existing C project in order to use it. Crucially, there needs to be a way to represent forward declarations of other modules' contents.
 
-Handling initialization order and importing existing standard libraries is also of major importance, though these topics are complex enough to be pulled into separate sections.
+Second, most modern languages don't require an additioanl file just to link symbols between files (Object Oriented languages have interfaces, but they are not required). We would like developers to only need to declare a symbol once, and leave symbol discovery to the module system.
+
+Third, it should not be confusing as to which module's symbols are visible at a given time, because a module's symbols should only be visible if said module allows them to be. Ideally, such symbols are only visible if said module exports them and a module imports said module (we will find there are special cases where we need to leak some information).
+
+Our key guiding principle which will help us achieve these goals is to **decouple symbol exports from each other**. This means that it should be possible to export a symbol's implementation details without leaking the implementation details of any other symbol. This allows our module system to have full control over what symbols are visible within a module, which enables us to perform our advanced analysis.
+
+Other topics that will be dicussed include module friendship, backwards compatibility and interactions with Cforall features. Some topics are highly complex and are pulled into separate sections, such as handling initialization order and importing existing standard libraries.
 
 ## Overview
 
@@ -82,7 +88,7 @@ Symbol definitions in our modules (ie. the symbols the module can export) are ei
 
 #### Types
 
-There are 3 kinds of types: builtins (eg. `int`), user-defined (ie. `struct`) and aliases (ie. `typedef`). We defer discussion on pointers, references and arrays until afterwards.
+We'll consider 3 kinds of types: builtins (eg. `int`), user-defined `struct` types, and aliases (ie. `typedef`). We defer discussion on pointers, references and arrays until the end of this section. We'll consider other user-defined types (eg. `union`) in Other kinds of symbols section.
 
 Built-ins are provided by the compiler to every module, so we don't need to consider them. We treat aliases like a `struct` with one field, which is implicitly accessed, allowing us to only consider the `struct` case (note that exporting a `typedef` without exporting the underlying type produces different behaviour than what one may be used to).
 
@@ -176,13 +182,13 @@ We'll first describe the layout of our module system by providing a rough descri
 
 ### Layout of the codebase
 
-In order to provide a formal argument that our module system is sound, we need to first describe the format of the codebase we are trying to analyze.
+In order to provide a formal argument that our module system is sound, we need to first describe the format of the codebase we are trying to analyze. We restrict the syntax of our module files significantly in order to simplify our proof.
 
 The file system is set up so that imports are relative to the current directory, or found in a library. For example, a module file `data/graph.cfa` trying to access `data/graph/node.cfa` would write `import graph/node;`. If such a file doesn't exist, we will look for `graph/node` within the provided libraries (starting from the root directory of each library).
 
 Module files have `module;` as their first statement. Import statements are written as `import filePath;`, where the file path can be escaped with double-quotes if necessary. Only top-level statements can be exported, done by having `export` as the first keyword (eg. `export const int i = 3;`). The available top-level statements are:
 * Imports: Format is `import path/to/file;` or `import "path to/file";` (double quotes for escaping characters).
-* Types: `struct` and `typedef` statements. Only one `struct` can be defined per top-level statement (eg. no `typedef struct {int i;} MyStruct;`). If we parameterize an array with an integer, it must either be a constant or a single variable.
+* Types: `struct` and `typedef` statements. Only one `struct`/`typedef` can be defined per top-level statement (eg. no `typedef struct {int i;} MyStruct;`). If we parameterize an array with an integer, it must either be a constant or a single variable.
 * Functions: Format is `returnType name(parameterType ...numberOfParameters) {...functionBody}`.
 * Variables: Format is `variableType name = initializerExpression;`. Initializer may be omitted. Only one variable can be declared per top-level statement (eg. no `int a, b;`).
 
@@ -227,7 +233,7 @@ While the importing module doesn't change its behaviour whether a function is in
 
 Now that all symbols visible to a module have been collected, we can proceed to resolve all symbols within function bodies or initializer expressions. Technically, the additional information needed to use them isn't required, though it simplifies our proof and implementation.
 
-We resolve names in the same manner as described in the section Resolving names of exported declarations. This means that symbols in the current module shadow those that are imported, though the imported symbols can still be accessed using the `::` operator.
+We resolve names in the same manner as described in the section Resolving names of exported declarations. This means that symbols in the current module (types and variables/functions are different) shadow those that are imported, though the imported symbols can still be accessed using the `::` operator.
 
 *In Cforall, the addition of the overload system means that symbols defined within our module system only have preference over imported symbols, instead of completely shadowing them. This works by having our module system provide a list of candidates for each symbol to the overload resolution system. The overload resolution algorithm will need to be refactored to hold the full name of a symbol (symbol name + module name), and favour symbols defined within the given module (eg. `struct MinHeap` in the provided example). Whether favour means "break ties" or "always use current module's symbols if possible" is a design choice (I prefer the latter).*
 
@@ -265,7 +271,7 @@ How do we provide the size and alignment of a type, though? A couple strategies 
 2. We extract size/alignment information into a separate generated module interface, which is used in place of the actual type. This provides much more succinct code to the compiler. We still need to crawl the codebase to get the information, but it is cached afterwards. One way to calculate size/alignment information is to generate a separate program with all the types, compile it, and inspect the result. Another way is to collect the sizes of the built-in types, then calculate the size/alignments of types from the idea that `struct` types take the maximum alignment of their fields.
 3. We store all size/alignment information in some central file. This is the same as the previous idea, except that we store all size/alignment in a central file instead of generating a module interface file for every module. This could help reduce file IO cost and simplify updating size/alignment information when types change.
 
-Option 3 sounds like the most ideal option, but option 1 is the easiest to implement, and is the configuration that is used in the Formalism section.
+Option 3 sounds like the most ideal option, but option 1 is the easiest to implement, and is the configuration that is used in the Formalism section. There is also another "gotcha" to consider with options 2 and 3: using type-punning to implement them seems to break strict aliasing rules in C99. A common way to avoid type-punning is to use `union` types, but 
 
 *Cforall has the sized trait, which may prove useful for me to use when implementing things (it will likely help with handling polymorphic functions and types). I was also made aware of lifetime operations in Cforall, which I am not that familiar with. I assume they are handled the same way as move/copy constructors - they also need to be provided alongside the size/alignment information.*
 
@@ -281,4 +287,141 @@ The other problem with supporting C macros is that they introduce a kind of orde
 
 But what about porting existing C code? With our current formulation, we don't provide a way to use C headers within our modules. This problem is complex enough that we will pull it out into a dedicated section (see Porting existing code section).
 
-*The rest of this proposal is not yet ready for public consumption.*
+### Import ordering does not matter
+
+A key problem with `#include` is that textual inclusion is order-dependent - including `a.h` before `b.h` may result in different behaviour than `b.h` before `a.h`. Not only does this cause confusion among developers, it also affects compilation speed - while headers can be precompiled, they must always account for the possibility of a C macro changing the meaning of the header file.
+
+Since our module system runs after the C preprocessor, our generated module interfaces can be optimized for maximum compiler efficiency. The potential gains are significant: when the standard library became available to import in C++23 (ie. `import std;`), the time to compile a "Hello World" program essentially halved. This significant reduction in build times likely translates to faster iterations and more productive developers.
+
+In terms of developer clarity, it's worth noting that in most programming patterns, this ability for `a.h` to influence `b.h` is undesirable. so when a user imports our modules, they receive the same symbols regardless of import order.
+
+Part of the inspiration for order-agnostic imports comes from functional programming, with its focus on limiting side effects. But what if you want to pass macros into a module? Here, we can take inspiration from the concept of a Functor from the ML programming language. While not in our current implementation, we can create a special kind of module which takes in a set of macros to be used when parsing the module. Otherwise, we use the same set of macros when parsing every module (eg. `#define ARCH amd64`, which we can define in some module configuration file).
+
+In the future, we can also support imports within functions. This takes some inspiration from Python, except that they are executed at compile-time instead of run time. These behave like a normal import, except they only take effect within the code block that they are imported in, and only for the statements after the import statement.
+
+Another area for future development is to use the generated module interfaces in a language server. The explicit visibility control provided by our module system over regular C allows us to provide cleaner information to AI in order to provide robust code-generation capabilities.
+
+### Forward declarations are unnecessary
+
+Since we scan all top-level declarations while generating module interfaces, forward declarations are unnecessary. In fact, the module system can resolve what would otherwise be incomplete types in C. In the following example, even if we added `struct Other;` after `module;`, `struct Other details;` would still break. However, with our module system, we can resolve this.
+
+```
+module;
+export struct Node {
+    int id;
+    struct Other details;
+};
+struct Other {
+    int symbols[max_symbols_supported];
+};
+const int max_symbols_supported = 100;
+```
+
+This property of being able to "look ahead" in a file echoes some parallels with classes in object-oriented languages. In those languages, a method's definition can call a method defined later, but still within the same class definition. In fact, modules and objects share many features (eg. abstraction, encapsulation). The main difference is that a module behaves more like a singleton class (as they are actually sections of code), wheras objects can be instantiated.
+
+A common pattern in C is to have mutually recursive types defined in different files (eg. `node.h` defines `struct Node {struct Edge **edges;};` while `edge.h` defines `struct Edge {struct Node **nodes;};`). In regular C, this pattern is resolved by inserting forward declarations of the other struct before defining the given struct. In order to make this work in our module system, we would import the other module. This highlights a potential limitation with our module system - it doesn't allow us to only export a forward declaration of a type. We argue this problem isn't particularly concerning, but there are ways to extend our system to support this (we can consider reserving certain export tag names, see Generating multiple module interfaces for details).
+
+The key feature that allows this is that our specification allows parsing top-level declarations with a context-free grammar (expressions in C are context-sensitive, but top-level declarations don't require parsing the expression part). As we extend this proposal with additional features (eg. nested types), care should be taken to ensure we don't introduce ambiguities in naming or context-sensitive parts. I am unsure if C++ top-level declarations are context-sensitive or not - if they are, then they would need to be disambiguated in order to apply this proposal to them.
+
+### Explicit transitive module dependencies
+
+A problem with C headers is that including them can cause other headers to be included. This can lead to difficulties refactoring the code to use a different library, as the existing code inadvertently makes use of these implicitly included headers. C's design requires this because types must be completely defined in order to use them, but our system avoids this problem by having symbol exports be decoupled from each other. As such, we can produce much cleaner module interfaces.
+
+However, we do not wish to ban transitive module dependencies, as there are many cases where we want to bundle multiple modules together. Due to this, we allow explicit transitive module dependencies through the use of `export import`. Let's take a look at two possible use-cases:
+
+```
+// module std
+module;
+export import std/vector;
+export import std/iostream;
+
+// module wrapper
+module;
+export import std/map;
+export import std/string;
+export typedef map[string, string] stringmap;
+
+// module client 
+module;
+import std;  // this is equivalent to import std/vector;
+             //                       import std/iostream;
+             //                       import std;
+import wrapper;  // this is equivalent to import std/map;
+                 //                       import std/string;
+                 //                       import wrapper;
+```
+
+To recap, if a module imports a module that contains `export import ABC;`, then it is as if the importing module had `import ABC;` as one of its import statements.
+
+In the above case, `std` allows developers to import a common set of functionality without having to remember the names of its constituent modules. `wrapper` handles a special case with exporting `typedef`: Since `wrapper` does not own `map` or `string`, we should `export import std/map; export import std/string;` if `client` expects to use the fields of `map[string, string]` (otherwise, we would only know that `stringmap` is a `map[string, string]`).
+
+### Exporting inline functions
+
+Inline functions require the definition of a function to be available to the compiler/optimizer. However, we want the importing module to behave the same way, whether an imported function is inline or not. Let's look at an example:
+
+```
+// module inlined
+module;
+import supporting;
+export inline int power(int a, int b) {
+    int ret = 1;
+    for (int i=0; i<b; ++i) ret = multiply(ret, a);
+    return ret;
+}
+// module supporting
+module;
+import deeper;
+export int multiply(int a, int b) {
+    int ret = 0;
+    for (int i=0; i<b; ++i) ret = add(ret, a);
+    return ret;
+}
+// module deeper
+module;
+export int add (int a, int b) {return a + b;}
+// module client
+module;
+export int foobar() {return power(10, 5);}
+```
+
+In this scenario, to compile `client`, the compiler needs the exported symbols of `inlined` and `supporting`. Note that the compiler does not need `deeper` because `multiply()` is not an inline function. However, `client` cannot access symbols from `supporting` unless it imports it directly.
+
+If `inlined` has not generated its module interfaces by the time `client` is being compiled, then the presence of a single inlined function would cause all modules imported by `inlined` to need to be traversed, since the module system cannot ascertain which module contains `multiply()`. After the module interfaces are generated (and the modules have not been edited in the meantime), we can use those instead of traversing imports.
+
+There are some optimizations that can be made here: if `supporting` has an inline function that is not used by `inlined`, then it does not need to be processed. In order to support this, we would need to handle partially defined module interfaces (as we would avoid parsing the body of the inline function in `supporting` while the module system processes `client`). There are also optimizations to be made in terms of how to store the body of an inline function in a module interface so that updates don't require reanalyzing the entire function body.
+
+### Generating multiple module interfaces
+
+A common problem with encapsulation is that certain modules may need certain functionalities from others that should otherwise be private. In object-oriented languages, this is accomplished by designating "friend classes", which get full access to a class' internals. However, this "all or nothing" approach lacks fine-grained control. Another alternative is to present multiple interfaces for importers to choose from, facilitated by the fact that we already generate module interfaces.
+
+```
+// module multiple
+module;
+export int public_function() {return 100;}
+export(internal) int internal_function() {return 10;}
+int private_function() {return 1;}
+// module kernel
+module;
+import multiple(internal);  // can use public_function, internal_function
+// module client
+module;
+import multiple;  // can use public_function
+```
+
+Here, `internal` is a user-defined tag. We could use `export(aaa)` and `import multiple(aaa)` instead. Additionally, we can attach multiple tags to an export (eg. `export(aaa, internal)`) and import with multiple tags (eg. `import multiple(aaa, internal)`). A symbol that is exported with tags is imported if the import statement includes one of its tags, and a symbol that is exported without a tag is imported as long as the import statement does not have `-` as its first argument (eg. `import multiple(-, internal)` would only make `internal_function` visible).
+
+This can be implemented by producing one module interface for every unique export tag in a module (+ export without a tag). Since symbol exports are decoupled from each other, we would only need to handle idempotent symbol exports (ignore duplicate symbol exports). Additional optimizations can be made to this process, such as storing all module interfaces in one file, processing common tag combinations, and handling updates to the module file.
+
+Note that `private_function()` is technically still accessible by accessing its mangled C name directly. An extension to this module system could be to automatically insert `static` to these functions if a flag is set.
+
+### Modules use `import` instead of `#include`
+
+Symbols defined in modules behave differently to those in regular C. In regular C, the defined symbols can be found in the outputted assembly using the same name that they were defined with. This is what allows forward declarations in C headers to work (eg. `void func();` produces a label `func` in the assembly). Unfortunately, this raises the possibility of having symbol names clash with each other. We avoid this by having every symbol defined within a module essentially have their name prepended with the module's file path. This difference in functionality means we cannot use `#include` to define module interfaces.
+
+Taking inspiration from C++20 modules, we use `import` to make a module's exported symbols be visible to another module. We also take some inspiration from C++20 modules with the use of `module;` as the first statement in a module file. However, contrary to C++20 modules, we do not require modules to be compiled fully in order to refer to any of its symbols, as part of an effort to avoid imposing any architectural constraints that aren't already in regular C.
+
+If the set of imported symbols still cause name clashes, we take inspiration from C++ namespaces and use the `::` operator to specify which module we are referring to. This uses the same syntax and semantics as `import` statements when resolving the module name.
+
+More discussion on the details of how modules are implemented is found in section Implementing module namespaces.
+
+*The rest of this proposal is still under active development.*
