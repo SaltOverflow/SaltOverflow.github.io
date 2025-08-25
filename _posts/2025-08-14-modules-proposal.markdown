@@ -5,7 +5,7 @@ date:   2025-08-14 09:00:00 -500
 categories: jekyll update
 ---
 
-*My masters thesis topic is on building a module system for the [Cforall](https://cforall.uwaterloo.ca) programming language. This differs from a standard blog post because it needs to be rigorous, and it is still a work in progress. I will be updating it as I continue working on this subject.*
+*My masters thesis topic is on building a module system for the [Cforall](https://cforall.uwaterloo.ca) programming language. This differs from a standard blog post because it needs to be rigorous, and may need to be updated if I find problems with my designs. You can see a record of any changes on my Github.*
 
 ## Motivation
 
@@ -27,7 +27,7 @@ Let's clarify what we're trying to achieve with our modules. The term "module" i
 
 First, to make C translation units into modules, our proposed modules should not require fundamental architectural changes to an existing C project in order to use it. Crucially, there needs to be a way to represent forward declarations of other modules' contents.
 
-Second, most modern languages don't require an additioanl file just to link symbols between files (Object Oriented languages have interfaces, but they are not required). We would like developers to only need to declare a symbol once, and leave symbol discovery to the module system.
+Second, most modern languages don't require an additional file just to link symbols between files (Object Oriented languages have interfaces, but they are not required). We would like developers to only need to declare a symbol once, and leave symbol discovery to the module system.
 
 Third, it should not be confusing as to which module's symbols are visible at a given time, because a module's symbols should only be visible if said module allows them to be. Ideally, such symbols are only visible if said module exports them and a module imports said module (we will find there are special cases where we need to leak some information).
 
@@ -162,7 +162,7 @@ After gathering the symbols in the imported modules, we can proceed to bind each
 
 In addition to name disambiguation, some symbols need additional information in order to be useable by importers. For example, size/alignment information of types, function bodies for inline functions, and trait information for polymorphic functions. This information is obtained by resolving the symbols on any imported module, and so on, as necessary.
 
-This task is recursive, which raises the problem of circular imports: What if we recurse back to `data/graph/node` (or any module that creates a cycle)? Since we reason at the level of symbol definitions, as long as we are analyzing different symbols inside the circularly imported module, we don't actually have a cycle. This leaves us with handling the problem where we circle back to the same symbol. For size/alignment analysis, coming back to the same type means that said type contains itself, which for our purposes is not resolvable (emit error and stop). If an inline function calls other inline function that mutually recurses with itself, we produce a forward declaration of the inline function within the underlying C code (Cforall compiles down to C). For trait information, a trait works like a collection of conditions, which means it includes itself, which means we can safely ignore circular references (we may want to emit a warning though). Since we can handle all of our circular problems, our system is well-defined here.
+This task is recursive, which raises the problem of circular imports: What if we recurse back to `data/graph/node` (or any module that creates a cycle)? Since we reason at the level of symbol definitions, as long as we are analyzing different symbols inside the circularly imported module, we don't actually have a cycle. This leaves us with handling the problem where we circle back to the same symbol. For size/alignment analysis, coming back to the same type means that said type contains itself, which for our purposes is not resolvable (emit error and stop). If an inline function calls another inline function that mutually recurses with itself, we produce a forward declaration of the inline function within the underlying C code (Cforall compiles down to C). For trait information, a trait works like a collection of conditions, which means it includes itself, which means we can safely ignore circular references (we may want to emit a warning though). Since we can handle all of our circular problems, our system is well-defined here.
 
 #### Resolving symbols
 
@@ -424,4 +424,146 @@ If the set of imported symbols still cause name clashes, we take inspiration fro
 
 More discussion on the details of how modules are implemented is found in section Implementing module namespaces.
 
-*The rest of this proposal is still under active development.*
+### Cyclic modules
+
+Acyclic vs cyclic in this case refers to whether a module needs to be fully compiled before its symbols can be used. In many languages, modules are acyclic (eg. Python, OCaml, Go). Since all symbols within a module are fully defined before they are used by other modules, our module system becomes much simpler to implement and allows us to incorporate metaprogramming into our modules. In contrast, C allows declaring symbols and using them in a limited capacity before they are defined, and Rust compiles all modules within a crate, allowing modules to use each others symbols without modules imposing ordering restrictions. Our proposed module system takes a slightly different approach than Rust by having the module system analyze other modules as necessary instead of defining crate boundaries. These are examples of cyclic modules, where the module system needs to do extra work in order to keep track of partial definitions.
+
+While acyclic modules can help organize a codebase and improve code readability, it enforces a certain code structure that may be incompatible with many common design patterns. For example, parsing an expression tends to require recursive functions and data structures, which would need to exist in a single acyclic module. However, there are many practical reasons (see Conway's law) why a codebase may take a different structure than it was initially designed for. Especially when building off of an existing language such as C, migration compatibility and incremental development are extremely important. As such, since C allows forward declarations, our module system allows cyclic dependencies.
+
+In order to account for cyclic dependencies in the details of a codebase while also enforcing an acyclic high-level code structure, many languages offer two "kinds" of modules. For example, C++ has namespaces and C++20 modules, Rust has modules and crates, and Java has packages and Java 9 modules. An extension to our module system could be to generate static libraries, which would function as acyclic modules.
+
+*For languages that only have acyclic modules, the language's type system usually provides a way to break cycles. For example, Go has interfaces and Ocaml has generic types. It may be possible to leverage Cforall's polymorphic functions and types in a similar manner. These techniques break the cycle by having caller and callee agree on some interface instead of the concrete types. However, this method this requires adding an extra layer of indirection to link to the concrete implementation, which may not be desirable in a systems programming environment. An alternate approach to generic types uses something akin to C++ templates, though this technique does not work for "all polymorphic types that satisfy some trait" since we can only generate a finite amount of assembly code.*
+
+### Other kinds of symbols
+
+The formalism provided only uses a limited subset of C, which raises the question: how would this apply to other kinds of symbols?
+
+C has `union` types, where each of its "fields" are actually different representations of the same piece of memory. Resolving `union` types follows the same technique as `struct` - resolve each of the field types, and a circular dependency is an error.
+
+C also allows defining types within the definitions of other types/variables (eg. `struct {int i;} x = {5};`). If we are to export such a statement, we would export all definitions together. This would be implemented by providing the full top-level declaration as-written to the compiler.
+
+Our module system would need to be changed to throw an error if we try to export a `static` function or variable. There could also be a number of features that are specific to each compiler that require special treatment by the module system (eg. `__attribute__`). This special treatment can have an arbitrary nature, making it challenging for the module system to be updated to handle them properly. If this becomes a large enough problem, a potential solution could be to use "hook functions" in order to make it easier to extend the module system as features get added.
+
+*C23 introduces `auto` as a type inference keyword (this is different than `auto` as a storage class specifier, which is reduntant and rarely used in practice). Cforall has an advanced overloading system, and this feature can cause type inference to span an arbitrary number of statements (even potentially accross functions with `auto foo() {...}`). Not only is this very challenging to implement efficiently, but it also can make code much harder to read if misused. As such, we currently do not support `auto` as a type inference keyword, though we monitor how it is used in pracice in case we wish to support it in the future. I believe compile-time reflection can enable our module system to handle `auto` as a type inference keyword, though I am not certain about this.*
+
+*The forall keyword is an addition to Cforall to support polymorphism, with polymorphic functions using dictionary passing and a single implementation. Exporting polymorphic functions and types work in the same way as their regular counterparts from the perspective of module visibility. However, the compiler needs to be provided trait information in order to call polymorphic functions with dictionary passing, as well as the layout function in order to allocate space on the stack for polymorphic types. Such information is gathered using compile-time reflection to search for trait information.*
+
+*An interesting case is to consider how Cforall could be updated to perform specialization (multiple implementations for a single function) in addition to the single implementation strategy. Rust's `impl` and `dyn` traits provide a good reference for how both strategies could be implemented in the language. This raises the question: which modules should the multiple implementations belong in? Since we focus on the idea that modules should own their contents, we would want the multiple implementations to exist within the module that owns the forall statement. It would be a very interesting extension to Cforall, though a significant amount of research would need to be conducted in order to determine the feasibility of some of this.*
+
+### Implementing module namespaces
+
+A module is defined by having `module;` be the first statement in a source file (somewhat similar to C++20 modules). Internally, modules work like namespaces, implemented by prepending the module name in front of all declared symbols. There are multiple alternatives to determine the module name - we use option 2 for its brevity:
+
+1. Have the user define the module names (eg. `module A;`). This is similar to how Java and C++ require specifying packages and namespaces, respectively. This gives the developer some flexibility on naming, as it is not tied to the file system. However, it raises some questions surrounding how module discovery works (if a module imports `A`, where is `A`?).
+2. Have the module names be defined from a "root directory" (eg. `module;` is module `A` because it is located at `src/A.cfa`, and `src/` is defined as the root directory). This creates import paths that look similar to include paths, allowing us to align more closely with existing C programmers. When searching for an appropriate module, a search is conducted first from the current directory, then we look for an appropriate library (similar to the include path in C). A downside is that this precludes adding nested modules (ie. module definitions within a module file), though we argue that nested modules are not that important.
+
+Another design choice that was made was to have files with the same name as a folder exist outside their folder. For example, module `graph` exists at `src/graph.cfa`, while module `graph/node` exists at `src/graph/node.cfa`. The alternative is to have module `graph` at `src/graph/mod.cfa` - this may be more familiar to some developers, but this complicates module discovery (eg. if there exists a module at `src/graph.cfa` at the same time, which takes precedence? Does `graph` use `import ../analysis;` or `import analysis;` in order to import the module at `src/analysis`?) and makes it less clear what module name to prepend to all declared symbols. Taking insights from Rust's move from `mod.rs` to files with the same name as the folder, we opt to use the more straightforward strategy.
+
+Libraries also share the same symbol namespace as the modules within a codebase, which raises the question: how do we differentiate between `lib/analysis.cfa`, `lib2/analysis.cfa` and `src/analysis.cfa`? One solution is to have the libraries be generated, where each module name is prepended with a library name (eg. symbol `func` in module `graph/node` in library `searcher` has full name `searcher$$graph$node$$func`). Another solution is to store within some central module configuration file a mapping between a library path and some unique library name to prefix symbols with. In fact, both strategies can be implemented: the library comes shipped with some name, which can be mapped to a different name in the central module configuration file. Imports could follow a syntax such as `import "lib:analysis";` to specify that we want the library instead of searching through the current directory.
+
+This prepending of the module name in front of all symbols within a module likely causes problems if we use `#include` within a module, as all of its contents will be prepended with the module name. It is challenging for our module system to disambiguate between a type definition from a header and a type definition from the module itself. One solution is to rely on annotations outputted by the preprocessor. Another solution is to introduce extern blocks, which escape the module prefixing (eg. `extern { #include <stdio.h> }`, though with the include statement on a separate line). Taking some inspiration from C++20 modules, we choose to incorporate the headers into the import statement (eg. `import stdio;`), essentially pretending that the header file is a module file. Since this is used to interface with existing C code, we don't currently consider prefixing a library name to avoid symbol clash. See Porting existing C code for details on how we accomplish this.
+
+This configuration allows for a special kind of optimization to be performed: since modules prepend their names to their symbols, every symobl can be disambiguated. This allows us to add functionality to perform a "unity build", where the entire codebase can be compiled within a single translation unit, allowing the compiler to inline functions at its discretion. This would allow us to balance a "development configuration" with the benefits of modularization, alongside a "release configuration" with maximum optimizations.
+
+### Implementing code analysis tools
+
+The explicit symbol visibility afforded by our module system over regular C (where forward declarations could refer to any piece of code in a codebase or library file) allows us to perform static code analysis with precision. In fact, we can reuse a significant portion of the module system's compile-time reflection mechanism to implement any static code analyzer.
+
+The functionality of the module system that could be reused by a static code analyzer is documented in the Formalism section. Namely, we can list the import and symbol lists of a single module file, analyze all symbols that are visible within a module, and figure out which symbols can match a given name. A code analysis tool could use this to help visualize how all symbols within a codebase are connected together. If we incorporate the overload resolution system and the runtime system into this, we can create a REPL for use in an advanced development environment.
+
+Another direction to take code analysis is in code refactoring. By incorporating a code editing tool into code analysis, we could provide functionality such as moving a symbol from one file to another while maintaining correctness. This would help guide a complex existing codebase into having a more acyclic high-level code structure, giving us a pathway from legacy C code to modern Cforall code.
+
+### Porting existing C code
+
+A major feature of Cforall is that it is an evolution of C, rather than a completely new language like Rust. This comes with numerous advantages: we are able to immediately tap into a large pool of existing code and programmer experience. This also comes with a number of restrictions: we are limited in how much we can add to the language without alienating C programmers, and we must focus on backwards compatibility (or requiring minimal migration changes).
+
+*It is also worth mentioning that Cforall compiles down to C, so there is an inherent extra cost to development that needs to be justified. In TypeScript, the argument is that a strong type system improves code readability enough to justify the extra compilation step. With our system, we argue that the explicit visibility control of our modules is worth the extra compilation step (even without the additional features of Cforall).*
+
+When incorporating existing C libraries into our system, we are given a header file and some compiled code. We could determine what macros are defined by having the preprocessor output all symbols that are defined - these details could be placed in a separate header file. Then we could parse the resulting header file to determine what symbols are provided. This would provide us with the "module interface" for that header file.
+
+To avoid module name prepending issues with `#include` statements, we use `import` instead to use these library headers while inside a module file (see Modules use `import` instead of `#include` section). To avoid changing anything with the compiled code's symbols, we avoid performing the module name + library name prepending that is described in Implementing module namespaces section. Note that this technique breaks the principle that modules should "own" their contents, because it is possible for an IO library to transitively depend on a string library (and therefore export it too). As such, we need to keep track of which header file we are grabbing symbols from so we can deduplicate type definitions, as well as keep track of forward type declarations to ensure they are defined at some point.
+
+One particularly difficult challenge is the problem of dealing with header files that define C macros. As described in C macros are not exportable section, we don't allow modules to export macros because it makes modules order-dependent. However, when dealing with library headers, we need to consider backwards compatibility. To support this, our module system could scan the module file a second time after figuring out which library headers are imported in order to determine if there would have been any symbols that would have been updated by one of the library headers' macros. If so, we raise a warning to tell the user to add a line such as `#include "stdio_macros.h"` (where `stdio_macros.h` is the name of the separate header file holding the C macros defined in `stdio`).
+
+How would one update a legacy C codebase to use modules? The strategy described above for library headers could be used to perform the first step, though we would like to eventually migrate to using modules instead of header files. If every .h file avoids using forward declarations to symbols that are not defined in the corresponding .c file, then the migration could be performed automatically. On another extreme, if we pull out every symbol definition into its own module, we could replace any forward declarations with their corresponding imports. However, in order to execute a reasonable migration, we need to avoid changing files more than necessary. In our initial analysis, we can flag any forward declarations in the header file that aren't defined in the corresponding .c file. These could be replaced with an import of the correct module, which could use export tags to ensure we only receive what is necessary (see Generating multiple module interfaces). Afterwards, some of the export tags can be combined together to simplify the interface, perhaps with the assistance of a tool to ensure no symbol bindings got changed.
+
+### Handling initialization order
+
+Some low-level programs run with no setup other than ensuring that functions and global variables are loaded into memory. However, many programs expect some initalization code to run before `main` to set up some systems. For example, we expect to be able to use `malloc` without first needing to call `initalize_glibc_library` (having to manage this for every program can be tedious and error-prone). Ideally, modules should own their own initialization code, with the module system handling ordering.
+
+*Technically this isn't a problem in C, since C only allows constant expressions in a global variable's initializer expressions. However, we would want our module system to support it for the reasons listed above. More importantly, initialization order is a problem for Cforall because it has constructors and allows calling functions within initializer expressions.*
+
+Unfortunately, the current compiler/linker architecture only offers limited control over managing the order of iniitalization code execution. By default, initialization code in C++ object files run in "link order" (the order in which files are passed to the linker). This can cause a global variable to be initialized using the value of another, before the other has been initialized (referred to as "static initialization order fiasco" in C++).
+
+While some compilers allow some finer control over initialization order on specific statements (eg. `__attrubute__((constructor(101)))` in GCC), the language itself should offer a method to describe the initialization order relationships between symbols (or automatically determine the ordering).
+
+#### How other languages handle initialization order
+
+C++20 modules and Go packages/modules handle this problem using acyclic modules. In this architecture, a module must be fully defined (and therefore its symbols are fully defined) before other modules can use it, so ordering the initialization code to match module dependencies avoids inter-module initialization problems. Unfortunately, as described in the Cyclic modules section, we cannot enforce acyclity on our modules if we wish to make it easy to migrate to using our module system.
+
+In Rust, global variables are either zero-initialized or initialized within contexts such as `lazy_static` (this uses synchronization primitives to ensure safety in concurrent contexts), and Rust's type system prevents many accidental uses of uninitialized values. However, some of the analysis that Rust performs essentially requires whole-program compilation, which is not compatible with C's separate compilation architecture. Besides, many C programmers do not wish to pay the cost of additional synchronization if it can be avoided.
+
+In C++, the introduction of `constexpr` functions meant that the initialization code could be run at compile time, so no initialization code would have to run before `main`. While this would be a great addition to Cforall, implementing this is outside the scope of this module proposal. Additionally, while this reduces the problem, it does not eliminate it - there may be code that we need to execute at runtime to perform program setup.
+
+#### What we want our module system to have
+
+In the most ideal case, we'd like our module system to automatically determine initialization dependencies between symbols, similar to how our module system automatically resolves cyclic module dependencies by analyzing symbols individually. However, while type dependencies are relatively simple and well-defined, the ordering dependencies of execution can be pervasive and rely on compiler implementation quirks.
+
+For example, what if we call a function that uses a global variable inside it? What if there is a specific order in which modules should register themselves to a global array? What if function `foo` should only be called after `init` is called? Not only do some of these problems require whole-program analysis to resolve, sometimes the programmer fails to specify the constraints they really want! Evidently, we should add some constraints to our module system, but we must be careful - it can make the language confusingly verbose and accidentally limit potential optimizations.
+
+Another consideration is implementation difficulty - many potential solutions are rejected for being too challenging to implement. For example, we could feed some initialization restrictions to the linker to resolve, but making changes to the linker is significantly out-of-scope for this module proposal. We also prefer solutions that don't require as much interaction with the overload resolution mechanism, since that system is very complex. As such, we are limited to providing ordering at a module level, leaving detailed verification to a separate tool.
+
+#### Our proposal for handling initialization order
+
+To handle initialization order, we introduce a new concept: ordered imports. If we write a statement like `ordered import "graph/node";`, then all runtime initialization within the current module will run after module `graph/node`. `export ordered import` works as if the importing module had `ordered import` specified. If an ordered import cycle is detected, then we error out.
+
+Note that if every `import` statement is `ordered import`, then we get acyclic modules. In essence, this system is a relaxation of acyclic modules, trusting that the user has avoided any use-before-initialization problems instead of outright enforcing it (we leave the job of detailed checking to a separate static code analysis tool). This means that if we have:
+
+```
+// module A
+module;
+ordered import B;
+
+// module B
+module;
+import C;
+
+// module C
+module;
+ordered import D;
+
+// module D
+module;
+```
+
+Then `D` is initialized before `C` and `B` is initialized before `A`, but `C` does not need to be initialized before `A`.
+
+Inspired by Go's `init` functions, our ordered imports allow us to introduce top-level `init { ... }` blocks, which can be used to run code before the `main` function runs. Like Go, these work like functions that are only called at initialization, and multiple `init` blocks within a module are executed in the order they appear in the source code. Different from Go, our `init` blocks do not look like function definitions, to allow us to extend `init` blocks to allow multi-stage iniitalization in a future proposal (eg. `init(1)` blocks run after all `init(0)` blocks, and `init` is shorthand for `init(0)`). Our initializers run single-threaded, since we do not assume that a multithreading environment is set up at initialization time.
+
+Internally, we use `__attribute__((constructor(N+M)))` to implement the initialization ordering (where `N` is a base value that can be configured, and `M` is the depth of the dependency chain). We may need to analyze more modules than usual to in order to determine the depth of the dependency chain if the other modules have not been processed by the module system yet (afterwards, that information is cached). If we have ties, we still fall back on the link path ordering to get deterministic ordering. We also do not handle initialization of static or dynamic libraries in this proposal, as building libraries is left to a future proposal.
+
+## Why C++20 modules failed (and why we will succeed)
+
+C++ serves as our main point of comparison, being a very popular language that extends C features. This raises the question: why use a different strategy than what is implemented in C++? While many features of C++ have been great additions to the language, C++20 modules stands out as the first major feature to be met with poor results. For example, it was the last major C++20 feature to be implemented in Clang and GCC (and is still not feature-complete as of 2025), lacks robust build support, and very few C++ projects have transitioned to using them. What went wrong? And how does our module system do things differently?
+
+While there are many reasons given as to why C++20 modules failed, often centering around missing features, we argue that the problem stems from poor incremental development support. Compiler implementations need to make pervasive changes in order to support a distinctly different compilation architecture, then carefully tested to ensure feature compatibility. Tooling such as build systems and intellisense also need to be updated to handle modules, which are supplied through the command line instead of being discovered through file paths. Libraries may need to be rewritten in order to adhere to the acyclic requirement of C++20 modules. All this means that users need to grapple with missing features, fragile implementations and a lack of widespread adoption to use as a reference. Simply put, using C++20 modules requires too many changes to be made to existing systems to see a major benefit, and it is still not ready for widespread use as of 2025.
+
+### What we do different
+
+Instead of approaching modules from the perspective of the "ideal module", we approach modules from the perspective of "what minimal code changes are required to make C translation units modules?" Not only is this important for adoption, this makes our features incremental and largely independent of each other, ensuring that many features can be moved to a later proposal if we lack sufficient time to implement them.
+
+A key difference between our modules and C++20 modules is that our modules allow cyclic dependencies. As stated in section Cyclic modules, many design patterns in C require being able to define recursive data structures and functions, which could not be defined across multiple acyclic modules. We relax this constraint while maintaining visibility control by treating each symbol definition as separate from each other. While this means our modules are not as self-contained as C++20 modules, they are much more widely applicable to existing design patterns. Note that even though we don't implement acyclic modules in this proposal, a later proposal can always build upon our foundation to provide them.
+
+In order to avoid requiring too many changes at once, we start by supporting a limited feature set in our modules, and build from there. This gives our system (and any tooling) specific feature sets to aim for, giving users a clearer understanding of what is supported and what is not.Starting from a simple setup also allows us to provide a formalism of how our module system would work, helping guide development of the Cforall compiler by providing a clear standard to adhere to.
+
+We also choose to make our modules be structured according to the file system instead of having modules choose their own names. This aligns much closer to `#include` following file paths and allows us to avoid having to pass files in via the command line. Taking this further, we avoid confusion by having modules with the same name as a folder exist as a file with the same name as a folder instead of using a special name inside the folder (eg. `src/graph.cfa` instead of `src/graph/mod.cfa`, see Implementing module namespaces section).
+
+### Notable differences between C++ and Cforall
+
+For all of the problems with C++'s implementation of modules, it is worth noting that C++ follows a different paradigm than Cforall, which can make it lean towards a different style than our proposed module system.
+
+The C++ specification pressures features to be fully interoperable with each other, and suffers from having multiple competing designs for a certain feature such as modules. Our cyclic module implementation requires certain restrictions to be met, such as a context-free grammar for top-level declarations, which would likely be challenging to get approval from a large committee. Acyclic modules are much more of a self-contained feature, making unforseen challenges less likely to cascade out of control. In this light, it makes sense that acyclic modules were chosen despite their drawbacks.
+
+It is also worth noting that our proposed module system requires leveraging compile-time reflection, a feature that some compiler developers may be hesitant to implement. C++ has a large existing codebase and userbase while Cforall is still in alpha development, making us more suited to use a new feature like this. We also both write the proposals and implement the compiler in Cforall, making it easier to tweak our proposal if it turns out to be exceedingly hard to implement. Contrast with how the C++ specifications committee is different than the engineers who implement the C++ compilers. All this makes it problematic for C++ to rely heavily on such an unproven technique even though Cforall can.
+
+There is also a difference in focus between C++ and Cforall: C++ focuses more on performance, while Cforall focuses more on development. While we are ok with the potential of having compilation perform whole-program analysis, on the premise that practical codebases wouldn't implement themselves in that way, this may not be acceptable in C++. While we consider the generation of multiple module interfaces for better expressivity, this aspect did not appear to be addressed in the original C++ modules proposal. As such, we believe we have the superior module system for development purposes.
