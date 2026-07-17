@@ -1,9 +1,11 @@
 ---
 layout: post
-title:  "A module proposal for Cforall (Masters thesis)"
+title:  "[OLD] A module proposal for Cforall (Masters thesis)"
 date:   2025-08-14 09:00:00 -500
 categories: jekyll update
 ---
+
+*NOTE: this article is very outdated at this point. I have since found better designs which are easier to understand, which I will be posting soon.*
 
 *My masters thesis topic is on building a module system for the [Cforall](https://cforall.uwaterloo.ca) programming language. This differs from a standard blog post because it needs to be rigorous, and may need to be updated if I find problems with my designs. You can see a record of any changes on my Github.*
 
