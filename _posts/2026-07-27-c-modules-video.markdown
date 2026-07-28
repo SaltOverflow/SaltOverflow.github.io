@@ -12,17 +12,19 @@ Many of these limitations are no longer the case, but the language still carries
 
 With that said, how do we build a module system for C that maintains the ethos and design patterns that C programmers depend on? Specifically, I'm interested in a module system that you can use as a drop-in replacement for header files and forward declarations. This is the problem I've been tackling for the last year, the results of which I presented at ONPLS 2026.
 
-Check out the re-recording of that talk in the link below. The video also contains a link to an implementation if you are interested in trying it out.
+Check out the re-recording of that talk below ([link](https://youtu.be/p8NpyBIRbEQ)). The video also contains a link to an implementation if you are interested in trying it out.
 
-https://youtu.be/p8NpyBIRbEQ
+<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/p8NpyBIRbEQ?si=8sForPEdOa51PDeA" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 The video is only 11 mins long, so I'm only able to go into a high-level overview of the system. The next article will go into the considerations behind making a module system for C, hopefully shedding some light on why certain decisions were taken.
 
 ## Appendix 1
 The C standard requires the number of bits in a byte (char is a byte) is at least 8. Some historical systems used more, like the Cray-1, used 64 bits. There are even some that used less, like the ICL 1900, which used 6 bits! The latter had a specialized, proprietary C compiler written for it, though this was back in the 1980s. [1] Nowadays, you can pretty much rely on a char being 8 bit, as these exotic systems are obsolete (the first Raspberry Pi was benchmarked as being 4.5 times faster than the Cray-1 [2]). POSIX mandates that a char is 8 bits. [3]
 
-[1] https://kids.kiddle.co/International_Computers_Limited
+\[[1](https://kids.kiddle.co/International_Computers_Limited)\] Section “Operating Systems and Software” mentions C was added in order to run Oracle databases
 
-[2] http://www.roylongbottom.org.uk/Cray%201%20Supercomputer%20Performance%20Comparisons%20With%20Home%20Computers%20Phones%20and%20Tablets.htm#anchor22
+\[[2](http://www.roylongbottom.org.uk/Cray%201%20Supercomputer%20Performance%20Comparisons%20With%20Home%20Computers%20Phones%20and%20Tablets.htm#anchor22)\] “The Raspberry Pi […] is more than 4.5 times faster than the Cray 1.”
 
-[3] "The values for the limits {CHAR_BIT}, {SCHAR_MAX}, and {UCHAR_MAX} are now required to be 8, +127, and 255, respectively." https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html#tag_13_23_10
+\[[3](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html#tag_13_23_10)\] "The values for the limits {CHAR_BIT}, {SCHAR_MAX}, and {UCHAR_MAX} are now required to be 8, +127, and 255, respectively."
+
+*Note: This is cross-posted with my Substack [here](https://substack.com/home/post/p-208598834). Substack has more features, but my own website gives me some room to experiment.*
