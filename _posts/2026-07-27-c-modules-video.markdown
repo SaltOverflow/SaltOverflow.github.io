@@ -16,7 +16,7 @@ Check out the re-recording of that talk below ([link](https://youtu.be/p8NpyBIRb
 
 <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/p8NpyBIRbEQ?si=8sForPEdOa51PDeA" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
-The video is only 11 mins long, so I'm only able to go into a high-level overview of the system. The next article will go into the considerations behind making a module system for C, hopefully shedding some light on why certain decisions were taken.
+The video is only 11 mins long, so I'm only able to go into a high-level overview of the system. I'm saving a more comprehensive discussion of the internals for a forthcoming paper. The next article will demo a full implementation that works with C99, so stay tuned!
 
 ## Appendix 1
 The C standard requires the number of bits in a byte (char is a byte) is at least 8. Some historical systems used more, like the Cray-1, used 64 bits. There are even some that used less, like the ICL 1900, which used 6 bits! The latter had a specialized, proprietary C compiler written for it, though this was back in the 1980s. [1] Nowadays, you can pretty much rely on a char being 8 bit, as these exotic systems are obsolete (the first Raspberry Pi was benchmarked as being 4.5 times faster than the Cray-1 [2]). POSIX mandates that a char is 8 bits. [3]
