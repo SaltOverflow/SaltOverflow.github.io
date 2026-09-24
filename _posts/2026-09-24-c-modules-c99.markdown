@@ -14,3 +14,5 @@ Alright. Here's a module implementation that extends C99 with 3 keywords: `modul
 Of course, this is just the beginning. For one thing, we can add the ability to import header files, add module namespacing to avoid name clashes, as well as a number of other extensions. Taking this further, we can even apply these same techniques to other languages, such as C++ or [Cforall](https://cforall.uwaterloo.ca).
 
 It is also worth mentioning that, while this is implemented in Python for faster prototyping, 1. This already runs faster than you need 2. The compiler is implemented following a [map-reduce architecture](https://matklad.github.io/2026/02/25/against-query-based-compilers.html#:~:text=Grug%20builds%20an%20incremental%20map%2Dreduce%20compiler%20for%20his%20language%3A), which makes it easy to optimize.
+
+*Note: This is cross-posted with my Substack [here](https://saltoverflow.substack.com/p/c-modules-a-c99-implementation). Substack has more features, but my own website gives me some room to experiment.*
