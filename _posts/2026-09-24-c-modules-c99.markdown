@@ -1,0 +1,16 @@
+---
+layout: post
+title:  "C Modules: A C99 Implementation"
+date:   2026-09-24 09:00:00 -500
+categories: jekyll update
+---
+
+In a [previous post]({% post_url 2026-07-27-c-modules-video %}), I went over the concepts behind my proposed C module system. But you're an engineer, right? You don't want empty promises, you want results. You want an implementation you can actually run.
+
+Alright. Here's a module implementation that extends C99 with 3 keywords: `module`, `import` and `export`. Just define your symbols and stop worrying about needing to define-before-use. The module system handles symbol dependencies automatically, so you don't need to write header files -- the way it should be.
+
+<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/v8zNJX5l0k8?si=5lT8gqyTutXfMaIZ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+Of course, this is just the beginning. For one thing, we can add the ability to import header files, add module namespacing to avoid name clashes, as well as a number of other extensions. Taking this further, we can even apply these same techniques to other languages, such as C++ or [Cforall](https://cforall.uwaterloo.ca).
+
+It is also worth mentioning that, while this is implemented in Python for faster prototyping, 1. This already runs faster than you need 2. The compiler is implemented following a [map-reduce architecture](https://matklad.github.io/2026/02/25/against-query-based-compilers.html#:~:text=Grug%20builds%20an%20incremental%20map%2Dreduce%20compiler%20for%20his%20language%3A), which makes it easy to optimize.
