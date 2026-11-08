@@ -1,0 +1,46 @@
+---
+layout: post
+title:  "C Modules: Support for C23"
+date:   2026-11-07 09:00:00 -500
+categories: jekyll update
+---
+
+My [previous post]({% post_url 2026-09-24-c-modules-c99 %}) showcased a working implementation of my cyclic module system for the C99 language. It's a promising extension for C if you're looking to eliminate your reliance on header files, but if you're using a language extension, you likely expect it to build upon the latest version of C.
+
+So the module system has been updated to support C23! You can [check out the code here](https://github.com/SaltOverflow/c-modules/tree/main/prototype_4). For information on how to run the system, you can check the README.md or watch the video in the [previous post]({% post_url 2026-09-24-c-modules-c99 %}) (it's the same user interface). For information on how the design works, you can check the DESIGN.md or watch the video in an [earlier post]({% post_url 2026-07-27-c-modules-video %}). For a deeper discussion on *why* certain design decisions were made and *how* the project got to this point, I'm saving those details for a forthcoming paper.
+
+But before I discuss the changes that were made to support C23, I'll address the elephant in the room: Yes, C++ can also work with this module system design. So for those who were disappointed to see that C++20 isn't a header file replacement (it's a library interface replacement, like Rust crates), just to say that it is on my radar.
+
+## C23 updates
+
+`static_assert` declarations were added to the language, which brings up the question of how exports should work on them. If `static_assert` is inside another definition (eg. `struct S {static_assert(sizeof(int)==4);};`), it is treated as belonging to that definition. If it's by itself at file-scope and not exported, it will only show up in the containing module's translation unit. If it's by itself at file-scope and exported, it will show up in all modules' translation units that use any symbol in the containing module.
+
+C23 attributes (eg. `[[noreturn]]`) were more about updating the many places in the grammar where they are allowed, and handling edge cases where they interfere with the existing implementation (eg. `extern [[abc]] int i;` is invalid because `extern` should be on the right of the attribute). At the moment, we simply pass these attributes through to the C compiler, though they will play a crucial role in future module extensions for passing user-supplied directives to the module system.
+
+`auto` for type inferencing is problematic because a variable that's using it cannot be declared without defining it (eg. `extern auto i;` is invalid). A bit of testing showed that `typeof_unqual(((void)0, <expression>))` is semantically equivalent to `auto` in all cases I could come up with, resolving the issue. `typeof_unqual` strips qualifiers and the comma expression triggers pointer decay, in line with how the C23 specification works.
+
+Opaque enumerators were also added, which required updating the implementation to handle multiple definitions (eg. `enum E : int;` can appear alongside `enum E : int {A,B,C};`). I also encountered a parsing ambiguity where `struct S {enum E : foo;};` can either be an opaque definition or an unnamed bitfield, with no way to tell without consulting the symbol table. The first interpretation is so bizarre that both gcc and clang will [throw warnings on them](https://godbolt.org/z/n5xY8aEef) (though they still compile). So, taking inspiration from C++'s [most vexing parse](https://en.wikipedia.org/wiki/Most_vexing_parse), we simply pick one interpretation to use (in this case, the second interpretation).
+
+## Fixes (also backported to C99)
+
+The way ANTLR handles semantic predicates in its grammar is by evaluating them for predictive lookahead only if they appear before a token is ingested. As such, there was a bug in the way cast expressions were handled. Consider `(a)*b` and how it is a cast if `a` is a type, and a multiplication if `a` is a variable. This is determined after ingesting the first `(`, but at that point the grammar has already committed to one interpretation (ANTLR does predictive lookahead, as opposed to backtracking). To fix this, you need to add a semantic predicate to the `<cast-expression>` rule.
+
+Error messages sometimes changed from run to run, because iterating over a set in Cython is nondeterministic. This has been rectified.
+
+Exported static variables were implemented by providing the definition to the importing module (similar to how header files work). However, there were some edge cases, such as if a variable depends on itself (eg. `static void* p = &p;`). The logic in this section has been reworked to handle exported static variables properly.
+
+## Other changes
+
+The project has been ported to use `uv` instead of `venv`, and the improvement in speed and ease-of-use is very nice. Using the module system is essentially a single command now. `venv` still works, for those who don't want to switch.
+
+Since the conceptual details of the module system have stayed largely the same from C99 to C23, AI coding turned out to be particularly useful here. Notably, testing, checking the spec and drafting up agreed-upon solutions made me feel like I was pair programming. However, I spent a lot of time doing my own brainstorming and reading through the thought trace, because this is my research problem -- I need to understand it at a very deep level. For example, there were a few cases where I implemented by hand because I needed to work out the mental model. I believe this is what allowed me to auto-generate DESIGN.md while still covering the points that I wanted to mention.
+
+*Note: This article is still written entirely by my hand. For matters of functionality, I think AI coding is fine as long as you spend the time to understand the system yourself. But for article writing, where personal expression and "taste" matter, I think it's rude to make readers sit through the "AI writing style." If you spend the time to read my articles, I want to make it worth your while.*
+
+## What's next?
+
+I'm looking to extend the module system to add additional features like the ability to import header files. However, the codebase is reaching a level of complexity where it really needs a refactor to better define module boundaries. Put simply, AI might be able to understand the codebase, but I'm starting to struggle to keep track of the "hacks" that have been added. So, using this implementation as a reference point, I'll be working on refactoring out the cruft so I can continue to extend this system and make it even better.
+
+In the short term, I'll be switching gears to work on my actual master's thesis, which is building a module system for [Cforall](https://cforall.uwaterloo.ca). Cforall is an extension of C, so this work flows nicely into it. However, it is implemented with Bison and C++, has about 10 years of graduate student features, and needs to handle function overloading, which is a nontrivial feature to support correctly. So, plenty of things to work on.
+
+*Note: This is cross-posted with my Substack [here](https://saltoverflow.substack.com/p/c-modules-support-for-c23). Substack has more features, but my own website gives me some room to experiment.*
