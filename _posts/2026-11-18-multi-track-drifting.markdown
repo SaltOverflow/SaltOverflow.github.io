@@ -73,7 +73,7 @@ To get the right width between the wheels, I found a convenient coincidence -- b
 
 ![Using the shims to enforce the right wheel width](/assets/multitrack-train-8.jpeg)
 
-While I was at this, I wanted to change the yarn harness for a 3d printed one for ease-of-use and better reproducibility. I spent 3 iterations to perfect the sleeve width and the binding method between the sleeve and the arm. I also found that I needed to use a longer coupler for arm-to-first-carriage than carriage-to-carriage to provide enough clearance from the arm.
+While I was at this, I wanted to change the yarn harness for a 3d printed one for better ease-of-use and reproducibility. I spent 3 iterations perfecting the sleeve width and the binding method between the sleeve and the arm. I also found that I needed to use a longer coupler for arm-to-first-carriage than carriage-to-carriage to provide enough clearance from the arm.
 
 ![A Marklin locomotive with the sleeve and arm attachment, showing how the regular connector doesn't provide enough clearance from hitting the arm attachment when going around corners](/assets/multitrack-train-9.jpeg)
 
@@ -90,3 +90,5 @@ Once you start to multi-track drift multiple carriages, manual switching becomes
 What else could be done to make this even better? The wheels sometimes get caught on the turnouts, which could be fixed by using a concave flange. The train platform is pretty bare-bones because I was doing basic modelling in Blender -- feel free to design fancier carriages like flatcars, boxcars and passenger cars. Automatic train coupling could be done, though it would likely require a lot of trial-and-error. I designate the safe multi-track speed as 60/120kph, but it can probably handle 80/120kph. Higher speeds like 100/120kph and above would probably benefit from lower coupler arms (the part that extends from the bogie) and more weight.
 
 But this is as far as I'll go for now. It's a solid base that works well, and you can extend it in many ways. I might be TAing the course next term (W27) -- if I am, I look forward to seeing your final projects.
+
+*Note: This is cross-posted with my Substack [here](https://saltoverflow.substack.com/p/the-quest-for-the-holy-multi-track). Substack has more features, but my own website gives me some room to experiment.*
