@@ -55,7 +55,7 @@ So we went through this whole era of iterations, reached a working prototype, ju
 
 ## The 3d print era
 
-It turns out that E5 has a 3d printing lab that's open to students. It also turns out that 3d printing is particularly suited to this use-case because it is sub-millimeter precise and reproducible by anyone with the STL file.
+It turns out that UWaterloo has a 3d printing lab that's open to students. It also turns out that 3d printing is particularly suited to this use-case because it is sub-millimeter precise and reproducible by anyone with the STL file.
 
 I ended up making 3 iterations, from the grey piece to the white piece to the black piece. I was playing around with the width and the flange size (this was before I found out this was standard HO scale track). I also found that I needed to switch to ultra-fine layer height (0.08mm) because the layers were catching on the rail expansion joints.
 
